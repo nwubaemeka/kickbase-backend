@@ -1167,7 +1167,7 @@ function showToast(msg, type = 'success') {
 // ===================== API & SOCKET SETUP =====================
 // Replace with your Render backend URL after deploying:
 // e.g. 'https://kickbase-backend.onrender.com'
-const API_BASE = window.KICKBASE_API || 'http://localhost:3001';
+const API_BASE = window.KICKBASE_API || 'https://kickbase-backend.onrender.com';
 
 async function apiCall(path, method = 'GET', body = null) {
   const token = localStorage.getItem('kickbase_token');
