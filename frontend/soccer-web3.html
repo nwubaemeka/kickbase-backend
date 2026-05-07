@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KickBase — Web3 Football (Base Sepolia)</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --pitch: #2d7a3a;
+    --pitch-dark: #236030;
+    --line: rgba(255,255,255,0.55);
+    --gold: #f5c842;
+    --red: #e63946;
+    --blue: #457b9d;
+    --bg: #0d0f12;
+    --card: #161a1f;
+    --card2: #1e2228;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0f0f0;
+    --muted: #7a828f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .hero-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.03em; }
+
+  /* ===== SCREENS ===== */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ===== HEADER ===== */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,15,18,0.95);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.08em; color: var(--gold); }
+  .logo span { color: var(--text); }
+
+  .wallet-btn {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 1.1rem;
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 2rem; cursor: pointer; font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem; color: var(--text); transition: all 0.2s;
+  }
+  .wallet-btn:hover { border-color: var(--gold); }
+  .wallet-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; }
+  .wallet-dot.connected { background: #22c55e; }
+
+  /* ===== HOME SCREEN ===== */
+  #screen-home {
+    background: radial-gradient(ellipse at 50% 0%, #1a3a2a 0%, var(--bg) 60%);
+  }
+  .hero {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; padding: 4rem 2rem 2rem;
+  }
+  .hero-title { font-size: clamp(4rem, 10vw, 8rem); line-height: 0.9; color: var(--text); }
+  .hero-title .accent { color: var(--gold); }
+  .hero-sub {
+    margin: 1.2rem 0 2.5rem;
+    font-size: 1.05rem; color: var(--muted); max-width: 520px;
+  }
+  .btn-primary {
+    padding: 0.85rem 2.5rem; background: var(--gold); color: #0d0f12;
+    font-weight: 600; font-size: 1rem; border-radius: 2rem;
+    border: none; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,200,66,0.35); }
+  .btn-secondary {
+    padding: 0.85rem 2.5rem; background: transparent; color: var(--text);
+    font-weight: 500; font-size: 1rem; border-radius: 2rem;
+    border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif; margin-left: 0.75rem;
+  }
+  .btn-secondary:hover { border-color: rgba(255,255,255,0.25); background: var(--card); }
+
+  .stats-row {
+    display: flex; gap: 3rem; margin-top: 3rem;
+    justify-content: center;
+  }
+  .stat { text-align: center; }
+  .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; color: var(--gold); }
+  .stat-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* ===== LOBBY SCREEN ===== */
+  #screen-lobby { padding: 0; }
+  .lobby-layout {
+    flex: 1; display: grid; grid-template-columns: 1fr 380px;
+    gap: 0; overflow: hidden;
+  }
+  .lobby-main { padding: 2rem; overflow-y: auto; }
+  .lobby-sidebar {
+    background: var(--card); border-left: 1px solid var(--border);
+    padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;
+    overflow-y: auto;
+  }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
+    color: var(--text); margin-bottom: 1rem; letter-spacing: 0.05em;
+  }
+
+  .wager-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 0.75rem; padding: 1.25rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; margin-bottom: 0.75rem; transition: border-color 0.2s;
+    cursor: pointer;
+  }
+  .wager-card:hover { border-color: rgba(245,200,66,0.4); }
+  .wager-card.my-wager { border-color: rgba(34,197,94,0.3); }
+
+  .wager-player { display: flex; align-items: center; gap: 0.75rem; }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--card2); display: flex; align-items: center;
+    justify-content: center; font-weight: 600; font-size: 0.95rem;
+    border: 2px solid var(--border);
+  }
+  .wager-info h4 { font-size: 0.9rem; font-weight: 500; }
+  .wager-info p { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+  .wager-amount {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: var(--gold);
+    text-align: right;
+  }
+  .wager-amount span { display: block; font-family: 'DM Sans', sans-serif; font-size: 0.7rem; color: var(--muted); }
+
+  .accept-btn {
+    padding: 0.5rem 1.2rem; background: var(--gold); color: #0d0f12;
+    border: none; border-radius: 1rem; cursor: pointer; font-weight: 600;
+    font-size: 0.85rem; font-family: 'DM Sans', sans-serif; transition: transform 0.15s;
+    white-space: nowrap;
+  }
+  .accept-btn:hover { transform: scale(1.05); }
+
+  .create-wager-form {
+    background: var(--card2); border-radius: 0.75rem;
+    padding: 1.25rem; border: 1px solid var(--border);
+  }
+  .form-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.4rem; display: block; text-transform: uppercase; letter-spacing: 0.08em; }
+  .form-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 0.5rem; padding: 0.6rem 0.9rem; color: var(--text);
+    font-size: 0.9rem; font-family: 'DM Sans', sans-serif; outline: none;
+    transition: border-color 0.2s; margin-bottom: 0.9rem;
+  }
+  .form-input:focus { border-color: var(--gold); }
+  .form-input::placeholder { color: var(--muted); }
+
+  /* ===== TEAM SELECT ===== */
+  #screen-team { background: var(--bg); }
+  .team-select-layout {
+    flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 2rem; padding: 2rem; max-width: 1200px; margin: 0 auto; width: 100%;
+  }
+  .team-panel h3 { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; margin-bottom: 1rem; }
+  .team-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.65rem;
+    max-height: 65vh; overflow-y: auto; padding-right: 0.25rem;
+  }
+  .team-option {
+    padding: 0.75rem; background: var(--card); border: 1.5px solid var(--border);
+    border-radius: 0.6rem; cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .team-option:hover { border-color: rgba(255,255,255,0.25); }
+  .team-option.selected { border-color: var(--gold); background: rgba(245,200,66,0.08); }
+  .team-flag { font-size: 1.4rem; }
+  .team-name { font-size: 0.85rem; font-weight: 500; }
+  .team-rating { font-size: 0.75rem; color: var(--muted); }
+
+  .match-preview {
+    grid-column: 1/-1; display: flex; align-items: center; justify-content: center;
+    gap: 2rem; padding: 1.5rem; background: var(--card); border-radius: 0.75rem;
+    border: 1px solid var(--border);
+  }
+  .match-team { text-align: center; }
+  .match-team .flag { font-size: 3rem; }
+  .match-team h2 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; margin-top: 0.5rem; }
+  .vs { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--muted); }
+
+  /* ===== GAME SCREEN ===== */
+  #screen-game { background: #0a0c0f; }
+  .game-hud {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.5rem; background: rgba(0,0,0,0.7);
+    border-bottom: 1px solid var(--border);
+  }
+  .hud-team { display: flex; align-items: center; gap: 0.75rem; }
+  .hud-score { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; }
+  .hud-score .goals { color: var(--gold); font-size: 2.8rem; }
+  .hud-timer { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--muted); text-align: center; }
+  .hud-timer .time { font-size: 2.2rem; color: var(--text); display: block; }
+
+  .pitch-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  canvas#pitch { border-radius: 0.5rem; max-width: 100%; max-height: calc(100vh - 200px); }
+
+  .controls-hint {
+    display: flex; gap: 2rem; justify-content: center; padding: 0.75rem;
+    font-size: 0.78rem; color: var(--muted); background: rgba(0,0,0,0.5);
+  }
+  .controls-hint kbd {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; font-size: 0.75rem; color: var(--text);
+  }
+
+  /* ===== END SCREEN ===== */
+  #screen-end {
+    align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 50%, #1a2a1a 0%, var(--bg) 70%);
+  }
+  .result-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 1rem; padding: 3rem; text-align: center; max-width: 520px; width: 90%;
+  }
+  .result-emoji { font-size: 5rem; margin-bottom: 1rem; }
+  .result-title { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; margin-bottom: 0.5rem; }
+  .result-sub { color: var(--muted); margin-bottom: 2rem; }
+  .result-amount { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; color: var(--gold); margin-bottom: 2rem; }
+  .tx-link { font-size: 0.78rem; color: var(--blue); word-break: break-all; display: block; margin-bottom: 1.5rem; }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    z-index: 999; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 1rem; padding: 2rem; max-width: 440px; width: 90%;
+  }
+  .modal h3 { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; margin-bottom: 1rem; }
+  .modal p { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+  .btn-ghost {
+    padding: 0.6rem 1.5rem; background: transparent; border: 1px solid var(--border);
+    border-radius: 1rem; color: var(--text); cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+
+  .toast {
+    position: fixed; bottom: 2rem; right: 2rem; z-index: 1000;
+    background: var(--card2); border: 1px solid var(--border); border-radius: 0.75rem;
+    padding: 1rem 1.5rem; font-size: 0.88rem; max-width: 320px;
+    transform: translateY(120%); transition: transform 0.3s;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .toast.show { transform: translateY(0); }
+  .toast.success { border-left: 3px solid #22c55e; }
+  .toast.error { border-left: 3px solid var(--red); }
+
+  .network-badge {
+    font-size: 0.7rem; padding: 2px 8px; border-radius: 1rem;
+    background: rgba(0,100,255,0.15); color: #60a5fa;
+    border: 1px solid rgba(0,100,255,0.25); margin-left: 0.5rem;
+  }
+
+  .wager-badge {
+    font-size: 0.7rem; padding: 2px 8px; border-radius: 1rem;
+    background: rgba(245,200,66,0.12); color: var(--gold);
+    border: 1px solid rgba(245,200,66,0.25);
+  }
+
+  .loading-spinner {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--gold);
+    animation: spin 0.7s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center; padding: 3rem 1rem; color: var(--muted);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 768px) {
+    .lobby-layout { grid-template-columns: 1fr; }
+    .lobby-sidebar { border-left: none; border-top: 1px solid var(--border); }
+    .team-select-layout { grid-template-columns: 1fr; }
+    .match-preview { flex-direction: column; gap: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- MODAL: Confirm Accept Wager -->
+<div class="modal-overlay" id="modal-accept">
+  <div class="modal">
+    <h3>Accept Wager</h3>
+    <p id="modal-accept-text">You are about to accept a wager of <strong>0.01 ETH</strong> from <strong>Player A</strong>. Both wallets will be locked until the match ends.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal('modal-accept')">Cancel</button>
+      <button class="btn-primary" id="modal-accept-confirm" onclick="confirmAcceptWager()">Accept & Lock Funds</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== HOME ==================== -->
+<div class="screen active" id="screen-home">
+  <header>
+    <div class="logo">Kick<span>Base</span></div>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <a href="auth.html" style="padding:0.45rem 1rem;background:transparent;border:1px solid var(--border);border-radius:2rem;font-size:0.85rem;color:var(--muted);text-decoration:none;transition:all 0.2s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.25)'" onmouseout="this.style.borderColor='var(--border)'">Sign Up / Log In</a>
+      <button class="wallet-btn" id="home-connect-btn" onclick="connectWallet()">
+        <span class="wallet-dot" id="home-dot"></span>
+        <span id="home-wallet-text">Connect Wallet</span>
+      </button>
+    </div>
+  </header>
+  <div class="hero">
+    <h1 class="hero-title">PLAY.<br><span class="accent">BET.</span><br>WIN.</h1>
+    <p class="hero-sub">2-player Web3 football on Base network. Wager ETH, pick your team, and settle it on the pitch.</p>
+    <div>
+      <button class="btn-primary" onclick="goToLobby()">Enter Lobby</button>
+      <button class="btn-secondary" onclick="connectWallet()">Connect Wallet</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-num" id="stat-matches">247</div><div class="stat-label">Matches Played</div></div>
+      <div class="stat"><div class="stat-num" id="stat-wagered">18.4</div><div class="stat-label">ETH Wagered</div></div>
+      <div class="stat"><div class="stat-num" id="stat-online">12</div><div class="stat-label">Online Now</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== LOBBY ==================== -->
+<div class="screen" id="screen-lobby">
+  <header>
+    <div class="logo">Kick<span>Base</span></div>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <span class="network-badge">Base Mainnet</span>
+      <button class="wallet-btn" id="lobby-connect-btn" onclick="connectWallet()">
+        <span class="wallet-dot" id="lobby-dot"></span>
+        <span id="lobby-wallet-text">Connect Wallet</span>
+      </button>
+      <button class="btn-secondary" style="padding:0.5rem 1rem;font-size:0.85rem;" onclick="showScreen('screen-home')">← Home</button>
+    </div>
+  </header>
+  <div class="lobby-layout">
+    <div class="lobby-main scrollbar-thin">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+        <div>
+          <div class="section-title" style="margin-bottom:0.25rem;">Open Wagers</div>
+          <div style="font-size:0.82rem;color:var(--muted);">Select any open match to challenge the creator</div>
+        </div>
+        <span id="online-count" style="font-size:0.82rem;color:#22c55e;">● 12 online</span>
+      </div>
+      <div id="wager-list">
+        <!-- Wager cards rendered by JS -->
+      </div>
+    </div>
+    <div class="lobby-sidebar scrollbar-thin">
+      <div class="section-title" style="font-size:1.2rem;">Post a Wager</div>
+      <div class="create-wager-form">
+        <label class="form-label">Your Handle</label>
+        <input class="form-input" id="input-handle" placeholder="e.g. goat_striker" />
+        <label class="form-label">Wager Amount (ETH)</label>
+        <input class="form-input" id="input-amount" type="number" placeholder="0.01" step="0.001" min="0.001" />
+        <label class="form-label">Message (optional)</label>
+        <input class="form-input" id="input-message" placeholder="I'll destroy anyone" />
+        <button class="btn-primary" style="width:100%;" onclick="postWager()">Post Wager</button>
+      </div>
+      <div style="font-size:0.78rem;color:var(--muted);line-height:1.6;">
+        <strong style="color:var(--text);">How it works:</strong><br>
+        1. Post a wager with an ETH amount<br>
+        2. Another player accepts your wager<br>
+        3. Both select teams and play<br>
+        4. Winner receives both wager amounts<br>
+        5. Loser is deducted automatically on Base
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TEAM SELECT ==================== -->
+<div class="screen" id="screen-team">
+  <header>
+    <div class="logo">Kick<span>Base</span></div>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <span class="wager-badge" id="wager-amount-badge">Wager: 0.01 ETH</span>
+      <button class="wallet-btn" id="ts-wallet-btn">
+        <span class="wallet-dot connected"></span>
+        <span id="ts-wallet-text">0x...</span>
+      </button>
+    </div>
+  </header>
+  <div style="text-align:center;padding:1.5rem 1rem 0;">
+    <div class="section-title" style="font-size:1.4rem;">SELECT YOUR TEAM</div>
+    <div style="font-size:0.85rem;color:var(--muted);" id="team-select-sub">Choose the team you'll play as</div>
+  </div>
+  <div class="team-select-layout">
+    <div class="team-panel">
+      <h3 id="p1-label">Player A — Pick Team</h3>
+      <div class="team-grid scrollbar-thin" id="team-grid-p1"></div>
+    </div>
+    <div class="team-panel">
+      <h3 id="p2-label">Player B — Pick Team</h3>
+      <div class="team-grid scrollbar-thin" id="team-grid-p2"></div>
+    </div>
+    <div class="match-preview">
+      <div class="match-team">
+        <div class="flag" id="p1-flag">🏳️</div>
+        <h2 id="p1-team-name">—</h2>
+      </div>
+      <div class="vs">VS</div>
+      <div class="match-team">
+        <div class="flag" id="p2-flag">🏳️</div>
+        <h2 id="p2-team-name">—</h2>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;padding:1rem;">
+    <button class="btn-primary" id="kick-off-btn" onclick="startMatch()" disabled style="opacity:0.5;cursor:not-allowed;">Kick Off!</button>
+  </div>
+</div>
+
+<!-- ==================== GAME ==================== -->
+<div class="screen" id="screen-game">
+  <div class="game-hud">
+    <div class="hud-team">
+      <span id="hud-p1-flag" style="font-size:1.5rem;">🇧🇷</span>
+      <div class="hud-score">
+        <span style="font-size:1rem;display:block;color:var(--muted);font-family:'DM Sans',sans-serif;font-weight:400;" id="hud-p1-name">Brazil</span>
+        <span class="goals" id="hud-score-p1">0</span>
+      </div>
+    </div>
+    <div class="hud-timer">
+      <span class="time" id="hud-time">90:00</span>
+      <span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);">Kickbase Match</span>
+    </div>
+    <div class="hud-team" style="flex-direction:row-reverse;">
+      <span id="hud-p2-flag" style="font-size:1.5rem;">🇩🇪</span>
+      <div class="hud-score" style="text-align:right;">
+        <span style="font-size:1rem;display:block;color:var(--muted);font-family:'DM Sans',sans-serif;font-weight:400;" id="hud-p2-name">Germany</span>
+        <span class="goals" id="hud-score-p2">0</span>
+      </div>
+    </div>
+  </div>
+  <div class="pitch-wrap">
+    <canvas id="pitch" width="900" height="600"></canvas>
+  </div>
+  <div class="controls-hint">
+    <span>P1: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Space</kbd> shoot/tackle</span>
+    <span>P2: <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> move · <kbd>Enter</kbd> shoot/tackle</span>
+  </div>
+</div>
+
+<!-- ==================== END SCREEN ==================== -->
+<div class="screen" id="screen-end">
+  <header>
+    <div class="logo">Kick<span>Base</span></div>
+  </header>
+  <div class="result-card">
+    <div class="result-emoji" id="result-emoji">🏆</div>
+    <div class="result-title" id="result-title">PLAYER A WINS!</div>
+    <div class="result-sub" id="result-sub">Final Score: 3 – 1</div>
+    <div class="result-amount" id="result-amount">+0.02 ETH</div>
+    <a class="tx-link" id="result-tx-link" href="#" target="_blank">View transaction on Basescan →</a>
+    <div style="display:flex;gap:0.75rem;justify-content:center;">
+      <button class="btn-primary" onclick="showScreen('screen-lobby')">Play Again</button>
+      <button class="btn-secondary" onclick="showScreen('screen-home')">Home</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== STATE =====================
+// ===================== CONTRACT CONFIG =====================
+// After deploying KickBaseEscrow.sol to Base Sepolia, replace the address below:
+const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000';
+const CONTRACT_ABI = [
+  "function createMatch(bytes32 matchId) payable",
+  "function joinMatch(bytes32 matchId) payable",
+  "function cancelMatch(bytes32 matchId)",
+  "function settleMatch(bytes32 matchId, uint8 winner)",
+  "function withdraw()",
+  "function getMatch(bytes32 matchId) view returns (tuple(address playerA, address playerB, uint256 wager, uint8 state, uint8 winner))",
+  "function getEarnings(address player) view returns (uint256)",
+];
+
+const state = {
+  wallet: null,
+  provider: null,
+  signer: null,
+  contract: null,
+  chainId: 84532,       // Base Sepolia Testnet
+  chainHex: '0x14a34',
+  explorerBase: 'https://sepolia.basescan.org',
+  balance: '0',
+  wagers: [],
+  pendingWager: null,
+  myWager: null,
+  activeMatchId: null,
+  p1Team: null,
+  p2Team: null,
+  matchWager: 0,
+  gameActive: false,
+  score: [0, 0],
+  timeLeft: 90 * 60,
+  timerInterval: null,
+  user: null,
+};
+
+// Load saved user profile from auth page
+(function loadProfile() {
+  try {
+    const saved = localStorage.getItem('kickbase_user');
+    if (saved) {
+      state.user = JSON.parse(saved);
+    }
+  } catch(e) {}
+})();
+
+// ===================== TEAMS =====================
+const TEAMS = [
+  { name: 'Brazil', flag: '🇧🇷', rating: 92, color: '#009C3B' },
+  { name: 'Argentina', flag: '🇦🇷', rating: 93, color: '#74ACDF' },
+  { name: 'France', flag: '🇫🇷', rating: 91, color: '#002395' },
+  { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', rating: 88, color: '#CF081F' },
+  { name: 'Germany', flag: '🇩🇪', rating: 87, color: '#000000' },
+  { name: 'Spain', flag: '🇪🇸', rating: 90, color: '#AA151B' },
+  { name: 'Portugal', flag: '🇵🇹', rating: 89, color: '#006600' },
+  { name: 'Netherlands', flag: '🇳🇱', rating: 87, color: '#FF6600' },
+  { name: 'Belgium', flag: '🇧🇪', rating: 86, color: '#EF3340' },
+  { name: 'Italy', flag: '🇮🇹', rating: 86, color: '#003399' },
+  { name: 'Croatia', flag: '🇭🇷', rating: 84, color: '#FF0000' },
+  { name: 'Morocco', flag: '🇲🇦', rating: 83, color: '#006233' },
+  { name: 'Nigeria', flag: '🇳🇬', rating: 82, color: '#008751' },
+  { name: 'Senegal', flag: '🇸🇳', rating: 82, color: '#00853F' },
+  { name: 'Uruguay', flag: '🇺🇾', rating: 83, color: '#5EB6E4' },
+  { name: 'Japan', flag: '🇯🇵', rating: 82, color: '#BC002D' },
+];
+
+// Dummy wagers for demo
+const DEMO_WAGERS = [
+  { id: 1, handle: 'striker_god', address: '0xAb3...f12', amount: '0.05', message: 'Easy money 💰', team: null, avatar: 'SG' },
+  { id: 2, handle: 'fullback_fc', address: '0x9c2...a44', amount: '0.02', message: 'Come get these hands', team: null, avatar: 'FF' },
+  { id: 3, handle: 'el_mago', address: '0x1F9...b33', amount: '0.1', message: "10 ETH? No, 0.1 ETH 😅", team: null, avatar: 'EM' },
+];
+
+// ===================== WALLET =====================
+async function connectWallet() {
+  if (typeof window.ethereum === 'undefined') {
+    showToast('MetaMask not detected. Please install MetaMask.', 'error');
+    return;
+  }
+  try {
+    state.provider = new ethers.providers.Web3Provider(window.ethereum);
+    await state.provider.send('eth_requestAccounts', []);
+    state.signer = state.provider.getSigner();
+    state.wallet = await state.signer.getAddress();
+
+    const network = await state.provider.getNetwork();
+    if (network.chainId !== state.chainId) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: state.chainHex }],
+        });
+      } catch (switchErr) {
+        if (switchErr.code === 4902) {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: state.chainHex,
+              chainName: 'Base Sepolia Testnet',
+              nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://sepolia.base.org'],
+              blockExplorerUrls: ['https://sepolia.basescan.org'],
+            }],
+          });
+        }
+      }
+      // Re-init provider after switch
+      state.provider = new ethers.providers.Web3Provider(window.ethereum);
+      state.signer = state.provider.getSigner();
+    }
+
+    // Init contract
+    if (CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000') {
+      state.contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, state.signer);
+    }
+
+    const balWei = await state.provider.getBalance(state.wallet);
+    state.balance = parseFloat(ethers.utils.formatEther(balWei)).toFixed(4);
+
+    updateWalletUI();
+    showToast(`Connected: ${shortAddr(state.wallet)} · ${state.balance} ETH`, 'success');
+  } catch (e) {
+    showToast(e.message || 'Connection failed', 'error');
+  }
+}
+
+function shortAddr(addr) {
+  if (!addr) return '';
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function updateWalletUI() {
+  const label = state.wallet
+    ? `${shortAddr(state.wallet)} · ${state.balance} ETH`
+    : 'Connect Wallet';
+  const connected = !!state.wallet;
+
+  ['home', 'lobby'].forEach(id => {
+    const dot = document.getElementById(`${id}-dot`);
+    const text = document.getElementById(`${id}-wallet-text`);
+    if (dot) dot.className = 'wallet-dot' + (connected ? ' connected' : '');
+    if (text) text.textContent = label;
+  });
+  const tsText = document.getElementById('ts-wallet-text');
+  if (tsText) tsText.textContent = state.wallet ? shortAddr(state.wallet) : 'Not connected';
+}
+
+// ===================== NAVIGATION =====================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goToLobby() {
+  renderWagerList();
+  showScreen('screen-lobby');
+}
+
+// ===================== LOBBY =====================
+function renderWagerList() {
+  const list = document.getElementById('wager-list');
+  const wagers = [...state.wagers, ...DEMO_WAGERS];
+
+  if (wagers.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">⚽</div><p>No open wagers yet.<br>Post one in the sidebar!</p></div>`;
+    return;
+  }
+
+  list.innerHTML = wagers.map(w => {
+    const isOwn = state.myWager && state.myWager.id === w.id;
+    return `
+    <div class="wager-card${isOwn ? ' my-wager' : ''}" onclick="${isOwn ? '' : `openAcceptModal(${w.id})`}">
+      <div class="wager-player">
+        <div class="avatar" style="background:hsl(${w.id * 73},35%,30%);color:hsl(${w.id * 73},70%,75%);">${w.avatar || w.handle.slice(0,2).toUpperCase()}</div>
+        <div class="wager-info">
+          <h4>${w.handle} <span style="color:var(--muted);font-weight:400;font-size:0.75rem;">${w.address}</span></h4>
+          <p>${w.message || 'Open for any challenger'}</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <div class="wager-amount">${w.amount}<span>ETH</span></div>
+        ${isOwn
+          ? `<span style="font-size:0.78rem;color:#22c55e;">Your wager</span>`
+          : `<button class="accept-btn" onclick="event.stopPropagation();openAcceptModal(${w.id})">Accept</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function postWager() {
+  if (!state.wallet) { showToast('Connect your wallet first', 'error'); return; }
+  const handle = (state.user?.username) || document.getElementById('input-handle').value.trim();
+  const amountInput = document.getElementById('input-amount').value;
+  const message = document.getElementById('input-message').value.trim();
+  if (!handle) { showToast('Enter a handle (or sign up for an account)', 'error'); return; }
+  if (!amountInput || parseFloat(amountInput) <= 0) { showToast('Enter a valid wager amount', 'error'); return; }
+
+  const amount = parseFloat(amountInput);
+  const matchId = ethers.utils.id(state.wallet + Date.now()); // unique bytes32
+
+  // Try real contract if deployed
+  if (state.contract && CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000') {
+    try {
+      showToast('Sending transaction…', 'success');
+      const weiAmount = ethers.utils.parseEther(amountInput);
+      const tx = await state.contract.createMatch(matchId, { value: weiAmount });
+      showToast('Waiting for confirmation…', 'success');
+      await tx.wait();
+      showToast(`Match created on-chain! TX: ${tx.hash.slice(0,12)}…`, 'success');
+      state.activeMatchId = matchId;
+    } catch(e) {
+      showToast('Contract error: ' + (e.reason || e.message), 'error');
+      return;
+    }
+  }
+
+  const wager = {
+    id: Date.now(),
+    handle, amount: amountInput, message,
+    address: shortAddr(state.wallet),
+    avatar: handle.slice(0,2).toUpperCase(),
+    matchId,
+  };
+  state.wagers.unshift(wager);
+  state.myWager = wager;
+  renderWagerList();
+  showToast(`Wager of ${amountInput} ETH posted!`, 'success');
+  document.getElementById('input-handle').value = '';
+  document.getElementById('input-amount').value = '';
+  document.getElementById('input-message').value = '';
+}
+
+let pendingAcceptId = null;
+
+function openAcceptModal(wagerId) {
+  const all = [...state.wagers, ...DEMO_WAGERS];
+  const w = all.find(x => x.id === wagerId);
+  if (!w) return;
+  pendingAcceptId = wagerId;
+  state.pendingWager = w;
+  document.getElementById('modal-accept-text').innerHTML =
+    `You are about to accept a wager of <strong>${w.amount} ETH</strong> from <strong>${w.handle}</strong>. Both wallets will be locked until the match ends.`;
+  document.getElementById('modal-accept').classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+async function confirmAcceptWager() {
+  if (!state.wallet) { showToast('Connect your wallet first', 'error'); closeModal('modal-accept'); return; }
+  const w = state.pendingWager;
+  closeModal('modal-accept');
+
+  // Call joinMatch on contract if deployed
+  if (state.contract && CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000' && w.matchId) {
+    try {
+      showToast('Sending join transaction…', 'success');
+      const weiAmount = ethers.utils.parseEther(w.amount.toString());
+      const tx = await state.contract.joinMatch(w.matchId, { value: weiAmount });
+      showToast('Waiting for confirmation…', 'success');
+      await tx.wait();
+      showToast(`Joined on-chain! TX: ${tx.hash.slice(0,12)}…`, 'success');
+      state.activeMatchId = w.matchId;
+    } catch(e) {
+      showToast('Contract error: ' + (e.reason || e.message), 'error');
+      return;
+    }
+  }
+
+  state.matchWager = parseFloat(w.amount);
+  document.getElementById('wager-amount-badge').textContent = `Wager: ${w.amount} ETH`;
+  setupTeamSelect();
+  showScreen('screen-team');
+}
+
+// ===================== TEAM SELECT =====================
+function setupTeamSelect() {
+  ['p1', 'p2'].forEach((p, i) => {
+    const grid = document.getElementById(`team-grid-${p}`);
+    grid.innerHTML = TEAMS.map((t, idx) => `
+      <div class="team-option" onclick="selectTeam('${p}',${idx})" id="team-${p}-${idx}">
+        <span class="team-flag">${t.flag}</span>
+        <div>
+          <div class="team-name">${t.name}</div>
+          <div class="team-rating">⭐ ${t.rating}</div>
+        </div>
+      </div>`).join('');
+  });
+  document.getElementById('p1-label').textContent = 'Player A — Pick Team';
+  document.getElementById('p2-label').textContent = 'Player B — Pick Team';
+  state.p1Team = null; state.p2Team = null;
+  updateMatchPreview();
+}
+
+function selectTeam(player, idx) {
+  const team = TEAMS[idx];
+  if (player === 'p1') state.p1Team = team;
+  else state.p2Team = team;
+
+  document.querySelectorAll(`[id^="team-${player}-"]`).forEach(el => el.classList.remove('selected'));
+  document.getElementById(`team-${player}-${idx}`).classList.add('selected');
+  updateMatchPreview();
+}
+
+function updateMatchPreview() {
+  const p1 = state.p1Team;
+  const p2 = state.p2Team;
+  document.getElementById('p1-flag').textContent = p1 ? p1.flag : '🏳️';
+  document.getElementById('p1-team-name').textContent = p1 ? p1.name : '—';
+  document.getElementById('p2-flag').textContent = p2 ? p2.flag : '🏳️';
+  document.getElementById('p2-team-name').textContent = p2 ? p2.name : '—';
+
+  const btn = document.getElementById('kick-off-btn');
+  if (p1 && p2) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  }
+}
+
+// ===================== GAME ENGINE =====================
+function startMatch() {
+  const p1 = state.p1Team;
+  const p2 = state.p2Team;
+  document.getElementById('hud-p1-flag').textContent = p1.flag;
+  document.getElementById('hud-p1-name').textContent = p1.name;
+  document.getElementById('hud-p2-flag').textContent = p2.flag;
+  document.getElementById('hud-p2-name').textContent = p2.name;
+  document.getElementById('hud-score-p1').textContent = '0';
+  document.getElementById('hud-score-p2').textContent = '0';
+
+  state.score = [0, 0];
+  state.timeLeft = 90 * 60;
+  state.gameActive = true;
+  showScreen('screen-game');
+  initGame();
+}
+
+// === CANVAS GAME ===
+const CANVAS_W = 900, CANVAS_H = 600;
+const PITCH_PAD = 50;
+const GOAL_W = 12, GOAL_H = 100;
+
+let canvas, ctx, animId;
+let keys = {};
+let ball, p1, p2;
+
+const PLAYER_R = 14, BALL_R = 9;
+const FRICTION = 0.96, BALL_FRICTION = 0.985;
+const MAX_SPEED = 4;
+const SHOOT_POWER = 16;
+const KICK_RANGE = PLAYER_R + BALL_R + 4;
+
+function initGame() {
+  canvas = document.getElementById('pitch');
+  ctx = canvas.getContext('2d');
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
+
+  resetPositions();
+  keys = {};
+  window.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault && ['Space','Enter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code) && e.preventDefault(); });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  if (animId) cancelAnimationFrame(animId);
+  startTimer();
+  gameLoop();
+}
+
+function resetPositions() {
+  ball = { x: CANVAS_W/2, y: CANVAS_H/2, vx: 0, vy: 0 };
+  p1 = { x: CANVAS_W/4, y: CANVAS_H/2, vx: 0, vy: 0, team: state.p1Team, score: 0 };
+  p2 = { x: 3*CANVAS_W/4, y: CANVAS_H/2, vx: 0, vy: 0, team: state.p2Team, score: 0 };
+}
+
+function startTimer() {
+  if (state.timerInterval) clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    if (!state.gameActive) return;
+    state.timeLeft--;
+    const mins = Math.floor(state.timeLeft / 60);
+    const secs = state.timeLeft % 60;
+    document.getElementById('hud-time').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    if (state.timeLeft <= 0) {
+      state.gameActive = false;
+      clearInterval(state.timerInterval);
+      cancelAnimationFrame(animId);
+      endMatch();
+    }
+  }, 1000);
+}
+
+let p1Cooldown = 0, p2Cooldown = 0;
+
+function gameLoop() {
+  if (!state.gameActive) return;
+  update();
+  draw();
+  animId = requestAnimationFrame(gameLoop);
+}
+
+function update() {
+  // P1: WASD + Space
+  let p1ax = 0, p1ay = 0;
+  if (keys['KeyW']) p1ay -= 0.7;
+  if (keys['KeyS']) p1ay += 0.7;
+  if (keys['KeyA']) p1ax -= 0.7;
+  if (keys['KeyD']) p1ax += 0.7;
+  p1.vx = clamp(p1.vx + p1ax, -MAX_SPEED, MAX_SPEED) * FRICTION;
+  p1.vy = clamp(p1.vy + p1ay, -MAX_SPEED, MAX_SPEED) * FRICTION;
+  p1.x = clamp(p1.x + p1.vx, PITCH_PAD + PLAYER_R, CANVAS_W - PITCH_PAD - PLAYER_R);
+  p1.y = clamp(p1.y + p1.vy, PITCH_PAD + PLAYER_R, CANVAS_H - PITCH_PAD - PLAYER_R);
+
+  // P2: Arrows + Enter
+  let p2ax = 0, p2ay = 0;
+  if (keys['ArrowUp']) p2ay -= 0.7;
+  if (keys['ArrowDown']) p2ay += 0.7;
+  if (keys['ArrowLeft']) p2ax -= 0.7;
+  if (keys['ArrowRight']) p2ax += 0.7;
+  p2.vx = clamp(p2.vx + p2ax, -MAX_SPEED, MAX_SPEED) * FRICTION;
+  p2.vy = clamp(p2.vy + p2ay, -MAX_SPEED, MAX_SPEED) * FRICTION;
+  p2.x = clamp(p2.x + p2.vx, PITCH_PAD + PLAYER_R, CANVAS_W - PITCH_PAD - PLAYER_R);
+  p2.y = clamp(p2.y + p2.vy, PITCH_PAD + PLAYER_R, CANVAS_H - PITCH_PAD - PLAYER_R);
+
+  // Ball physics
+  ball.vx *= BALL_FRICTION;
+  ball.vy *= BALL_FRICTION;
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // Ball wall bounce
+  if (ball.x - BALL_R < PITCH_PAD) { ball.x = PITCH_PAD + BALL_R; ball.vx *= -0.7; }
+  if (ball.x + BALL_R > CANVAS_W - PITCH_PAD) { ball.x = CANVAS_W - PITCH_PAD - BALL_R; ball.vx *= -0.7; }
+  if (ball.y - BALL_R < PITCH_PAD) { ball.y = PITCH_PAD + BALL_R; ball.vy *= -0.7; }
+  if (ball.y + BALL_R > CANVAS_H - PITCH_PAD) { ball.y = CANVAS_H - PITCH_PAD - BALL_R; ball.vy *= -0.7; }
+
+  // Player-ball collision
+  handleKick(p1, 'Space', 1);
+  handleKick(p2, 'Enter', 2);
+
+  // Player-player collision
+  const pdx = p1.x - p2.x, pdy = p1.y - p2.y;
+  const pd = Math.hypot(pdx, pdy);
+  if (pd < PLAYER_R * 2) {
+    const push = (PLAYER_R * 2 - pd) / 2;
+    const nx = pdx / pd, ny = pdy / pd;
+    p1.x += nx * push; p1.y += ny * push;
+    p2.x -= nx * push; p2.y -= ny * push;
+  }
+
+  // Cooldowns
+  if (p1Cooldown > 0) p1Cooldown--;
+  if (p2Cooldown > 0) p2Cooldown--;
+
+  // Goal detection
+  const goalTop = CANVAS_H/2 - GOAL_H/2, goalBot = CANVAS_H/2 + GOAL_H/2;
+
+  // Left goal (P2 scores)
+  if (ball.x - BALL_R < PITCH_PAD && ball.y > goalTop && ball.y < goalBot) {
+    state.score[1]++;
+    document.getElementById('hud-score-p2').textContent = state.score[1];
+    flashGoal();
+    setTimeout(resetPositions, 1500);
+  }
+  // Right goal (P1 scores)
+  if (ball.x + BALL_R > CANVAS_W - PITCH_PAD && ball.y > goalTop && ball.y < goalBot) {
+    state.score[0]++;
+    document.getElementById('hud-score-p1').textContent = state.score[0];
+    flashGoal();
+    setTimeout(resetPositions, 1500);
+  }
+}
+
+function handleKick(player, shootKey, playerNum) {
+  const dx = ball.x - player.x, dy = ball.y - player.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < KICK_RANGE) {
+    const nx = dx / dist, ny = dy / dist;
+    const cooldown = playerNum === 1 ? p1Cooldown : p2Cooldown;
+    if (keys[shootKey] && cooldown === 0) {
+      // Shoot towards opponent's goal
+      const dir = playerNum === 1 ? 1 : -1;
+      ball.vx = dir * SHOOT_POWER + player.vx * 0.5;
+      ball.vy = (ball.y - CANVAS_H/2) * 0.08 + player.vy * 0.5;
+      if (playerNum === 1) p1Cooldown = 30; else p2Cooldown = 30;
+    } else {
+      // Dribble push
+      ball.vx += nx * 3 + player.vx * 0.5;
+      ball.vy += ny * 3 + player.vy * 0.5;
+      ball.x = player.x + nx * KICK_RANGE;
+      ball.y = player.y + ny * KICK_RANGE;
+    }
+  }
+}
+
+let goalFlash = 0;
+function flashGoal() { goalFlash = 30; }
+
+function draw() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // Pitch
+  ctx.fillStyle = '#2d7a3a';
+  ctx.fillRect(PITCH_PAD, PITCH_PAD, CANVAS_W - 2*PITCH_PAD, CANVAS_H - 2*PITCH_PAD);
+
+  // Stripe pattern
+  ctx.fillStyle = 'rgba(0,0,0,0.07)';
+  for (let i = 0; i < 8; i++) {
+    if (i % 2 === 0) {
+      const stripeW = (CANVAS_W - 2*PITCH_PAD) / 8;
+      ctx.fillRect(PITCH_PAD + i * stripeW, PITCH_PAD, stripeW, CANVAS_H - 2*PITCH_PAD);
+    }
+  }
+
+  // Lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 2;
+
+  // Border
+  ctx.strokeRect(PITCH_PAD, PITCH_PAD, CANVAS_W - 2*PITCH_PAD, CANVAS_H - 2*PITCH_PAD);
+
+  // Center line
+  ctx.beginPath();
+  ctx.moveTo(CANVAS_W/2, PITCH_PAD);
+  ctx.lineTo(CANVAS_W/2, CANVAS_H - PITCH_PAD);
+  ctx.stroke();
+
+  // Center circle
+  ctx.beginPath();
+  ctx.arc(CANVAS_W/2, CANVAS_H/2, 70, 0, Math.PI*2);
+  ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.arc(CANVAS_W/2, CANVAS_H/2, 4, 0, Math.PI*2);
+  ctx.fill();
+
+  // Penalty boxes
+  const pbW = 100, pbH = 200;
+  ctx.strokeRect(PITCH_PAD, CANVAS_H/2 - pbH/2, pbW, pbH);
+  ctx.strokeRect(CANVAS_W - PITCH_PAD - pbW, CANVAS_H/2 - pbH/2, pbW, pbH);
+
+  // Goals
+  const goalTop = CANVAS_H/2 - GOAL_H/2, goalBot = CANVAS_H/2 + GOAL_H/2;
+
+  // Left goal (P2's goal — P1 attacks)
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(PITCH_PAD - GOAL_W, goalTop, GOAL_W, GOAL_H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.strokeRect(PITCH_PAD - GOAL_W, goalTop, GOAL_W, GOAL_H);
+
+  // Right goal (P1's goal — P2 attacks)
+  ctx.fillRect(CANVAS_W - PITCH_PAD, goalTop, GOAL_W, GOAL_H);
+  ctx.strokeRect(CANVAS_W - PITCH_PAD, goalTop, GOAL_W, GOAL_H);
+
+  // Team labels on goal line
+  ctx.font = 'bold 11px DM Sans';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('← ' + (state.p1Team?.name || 'P1'), 120, PITCH_PAD - 8);
+  ctx.fillText((state.p2Team?.name || 'P2') + ' →', CANVAS_W - 120, PITCH_PAD - 8);
+
+  // Goal flash
+  if (goalFlash > 0) {
+    ctx.fillStyle = `rgba(245,200,66,${goalFlash/60 * 0.3})`;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    goalFlash--;
+  }
+
+  // Ball shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(ball.x + 3, ball.y + 4, BALL_R, BALL_R*0.5, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Ball
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Ball pattern
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(ball.x - 2, ball.y - 2, 3, 0, Math.PI*2);
+  ctx.fill();
+
+  // Draw players
+  drawPlayer(p1, p1.team?.color || '#f5c842', '1', p1Cooldown > 0);
+  drawPlayer(p2, p2.team?.color || '#e63946', '2', p2Cooldown > 0);
+}
+
+function drawPlayer(p, color, label, hasBall) {
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(p.x + 3, p.y + 5, PLAYER_R, PLAYER_R*0.4, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = hasBall ? '#fff' : color;
+  ctx.strokeStyle = hasBall ? color : 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Label
+  ctx.font = `bold ${PLAYER_R}px DM Sans`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = hasBall ? color : '#fff';
+  ctx.fillText(label, p.x, p.y);
+  ctx.textBaseline = 'alphabetic';
+}
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+// ===================== END MATCH =====================
+async function endMatch() {
+  const [s1, s2] = state.score;
+  const winner = s1 > s2 ? 1 : s2 > s1 ? 2 : 0;
+  const wagerAmt = state.matchWager;
+  const winnerTeam = winner === 1 ? state.p1Team : winner === 2 ? state.p2Team : null;
+
+  document.getElementById('result-sub').textContent = `Final Score: ${s1} – ${s2}`;
+
+  if (winner === 0) {
+    document.getElementById('result-emoji').textContent = '🤝';
+    document.getElementById('result-title').textContent = "IT'S A DRAW!";
+    document.getElementById('result-amount').textContent = 'Wager refunded';
+  } else {
+    document.getElementById('result-emoji').textContent = '🏆';
+    document.getElementById('result-title').textContent = `${winnerTeam.name} WINS!`;
+    document.getElementById('result-amount').textContent = `+${(wagerAmt * 2 * 0.99).toFixed(3)} ETH (after 1% fee)`;
+  }
+
+  // Backend calls settleMatch on the contract with the operator key (tamper-proof)
+  const link = document.getElementById('result-tx-link');
+  showToast('Settling on-chain via server…', 'success');
+  const settled = await apiCall('/matches/settle', 'POST', {
+    matchIdHex: state.activeMatchId,
+    winner, scoreA: s1, scoreB: s2,
+  });
+  if (settled?.txHash) {
+    link.href = `${state.explorerBase}/tx/${settled.txHash}`;
+    link.textContent = `View on Basescan: ${settled.txHash.slice(0,18)}… →`;
+    showToast('Settled! Winnings transferred on-chain.', 'success');
+  } else {
+    // Demo mode — backend or contract not yet deployed
+    const fakeTx = '0x' + Array.from({length:64},()=>Math.floor(Math.random()*16).toString(16)).join('');
+    link.href = `${state.explorerBase}/tx/${fakeTx}`;
+    link.textContent = `[Demo] Deploy backend + contract for real settlement →`;
+  }
+
+  showScreen('screen-end');
+}
+
+// ===================== UTILS =====================
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ===================== API & SOCKET SETUP =====================
+// Replace with your Render backend URL after deploying:
+// e.g. 'https://kickbase-backend.onrender.com'
+const API_BASE = window.KICKBASE_API || 'http://localhost:3001';
+
+async function apiCall(path, method = 'GET', body = null) {
+  const token = localStorage.getItem('kickbase_token');
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  };
+  try {
+    const res = await fetch(`${API_BASE}/api${path}`, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  } catch (err) {
+    // Backend not reachable — game still works in local demo mode
+    console.warn('[api] Not reachable, running in demo mode:', err.message);
+    return null;
+  }
+}
+
+// Load Socket.IO from the backend for real-time lobby + game sync
+let socket = null;
+function initSocket() {
+  try {
+    const script = document.createElement('script');
+    script.src = `${API_BASE}/socket.io/socket.io.js`;
+    script.onload = () => {
+      socket = window.io(API_BASE);
+      socket.on('connect', () => {
+        console.log('[socket] Connected:', socket.id);
+        socket.emit('join_lobby');
+        if (state.user) {
+          socket.emit('identify', { userId: state.user.id, username: state.user.username });
+        }
+      });
+      // Live online count
+      socket.on('online_count', count => {
+        document.querySelectorAll('#online-count').forEach(el => {
+          el.textContent = `● ${count} online`;
+        });
+        document.getElementById('stat-online').textContent = count;
+      });
+      // New wager posted by someone else
+      socket.on('new_wager', wager => {
+        if (!state.wagers.find(w => w.id === wager.id)) {
+          state.wagers.unshift(wager);
+          renderWagerList();
+        }
+      });
+      // A wager we're watching got accepted
+      socket.on('wager_taken', ({ matchIdHex }) => {
+        state.wagers = state.wagers.filter(w => w.matchId !== matchIdHex);
+        renderWagerList();
+      });
+      // Opponent joined our game room
+      socket.on('game_start', () => {
+        showToast('Opponent connected — game starting!', 'success');
+      });
+      // Opponent disconnected mid-game
+      socket.on('opponent_disconnected', ({ message }) => {
+        showToast(message, 'error');
+      });
+      // Game over signal from server
+      socket.on('game_over', ({ scoreA, scoreB, winner }) => {
+        if (state.gameActive) {
+          state.gameActive = false;
+          state.score = [scoreA, scoreB];
+          clearInterval(state.timerInterval);
+          cancelAnimationFrame(animId);
+          endMatch();
+        }
+      });
+    };
+    script.onerror = () => console.warn('[socket] Could not load Socket.IO — running in local mode');
+    document.head.appendChild(script);
+  } catch(e) {
+    console.warn('[socket] Init failed:', e.message);
+  }
+}
+
+// Override postWager to also register match with backend
+const _origPostWager = window.postWager;
+async function postWager() {
+  if (!state.wallet) { showToast('Connect your wallet first', 'error'); return; }
+  const handle = (state.user?.username) || document.getElementById('input-handle').value.trim();
+  const amountInput = document.getElementById('input-amount').value;
+  const message = document.getElementById('input-message').value.trim();
+  if (!handle) { showToast('Enter a handle (or sign up for an account)', 'error'); return; }
+  if (!amountInput || parseFloat(amountInput) <= 0) { showToast('Enter a valid wager amount', 'error'); return; }
+
+  const matchIdHex = ethers.utils.id(state.wallet + Date.now());
+
+  // On-chain: create match
+  if (state.contract && CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000') {
+    try {
+      showToast('Sending on-chain transaction…', 'success');
+      const weiAmount = ethers.utils.parseEther(amountInput);
+      const tx = await state.contract.createMatch(matchIdHex, { value: weiAmount });
+      showToast('Waiting for confirmation…', 'success');
+      const receipt = await tx.wait();
+      showToast('Match locked on-chain!', 'success');
+
+      // Register with backend DB
+      await apiCall('/matches/create', 'POST', {
+        matchIdHex, wagerEth: amountInput, txHash: tx.hash, message,
+      });
+
+      state.activeMatchId = matchIdHex;
+    } catch(e) {
+      showToast('Error: ' + (e.reason || e.message), 'error'); return;
+    }
+  }
+
+  const wager = {
+    id: Date.now(), handle, amount: amountInput, message,
+    address: shortAddr(state.wallet), avatar: handle.slice(0,2).toUpperCase(), matchIdHex,
+  };
+  state.wagers.unshift(wager);
+  state.myWager = wager;
+  renderWagerList();
+
+  // Broadcast to lobby via socket
+  if (socket?.connected) socket.emit('wager_posted', wager);
+
+  showToast(`Wager of ${amountInput} ETH posted!`, 'success');
+  document.getElementById('input-handle').value = '';
+  document.getElementById('input-amount').value = '';
+  document.getElementById('input-message').value = '';
+}
+
+// ===================== INIT =====================
+// Pre-fill handle from saved profile
+if (state.user?.username) {
+  const el = document.getElementById('input-handle');
+  if (el) { el.value = state.user.username; el.disabled = true; }
+}
+
+// Update network badge
+document.querySelectorAll('.network-badge').forEach(el => {
+  el.textContent = 'Base Sepolia Testnet';
+});
+
+// Load lobby from backend, fall back to demo wagers
+(async () => {
+  const data = await apiCall('/matches/lobby');
+  if (data?.matches?.length) {
+    state.wagers = data.matches.map(m => ({
+      id: m.id,
+      handle: m.player_a_name || shortAddr(m.player_a_wallet || '0x000'),
+      amount: m.wager_amount,
+      message: m.message || 'Open for any challenger',
+      address: '0x...',
+      avatar: (m.player_a_name || 'PL').slice(0,2).toUpperCase(),
+      matchIdHex: m.match_id_hex,
+    }));
+  }
+  renderWagerList();
+})();
+
+updateWalletUI();
+initSocket();
+
+</script>
+</body>
+</html>

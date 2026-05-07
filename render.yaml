@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: kickbase-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RPC_URL
+        sync: false
+      - key: CHAIN_ID
+        value: 84532
+      - key: OPERATOR_PRIVATE_KEY
+        sync: false
+      - key: CONTRACT_ADDRESS
+        sync: false
+      - key: EXPLORER_URL
+        value: https://sepolia.basescan.org
+      - key: FRONTEND_URL
+        sync: false
