@@ -18,49 +18,58 @@ const io = new Server(server, {
   cors: { origin: process.env.FRONTEND_URL || '*', methods: ['GET', 'POST'] },
 });
 
+// Trust Render's proxy
+app.set('trust proxy', 1);
+
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
-app.set('trust proxy', 1);
-app.set('trust proxy', 1);
 app.use(express.json({ limit: '50kb' }));
 
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 100,
+  windowMs: 15 * 60 * 1000, max: 200,
   message: { error: 'Too many requests, slow down' },
 });
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 20,
+  windowMs: 15 * 60 * 1000, max: 50,
   message: { error: 'Too many auth attempts' },
 });
+
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
+// Health check (no auth needed)
 app.get('/health', async (req, res) => {
   const chain = await checkConnection();
   res.json({ status: 'ok', timestamp: new Date().toISOString(), blockchain: chain });
 });
 
-app.use((req, res, next) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
-});
-
-app.use((err, req, res, next) => {
-  console.error('[error]', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
 const PORT = process.env.PORT || 3001;
 
-// Init DB first, then start server and routes
+// Init DB first, then register routes, then start server
 getDb().then(db => {
-  // Load routes after DB is ready
+  console.log('[db] Database ready');
+
+  // Load and register routes AFTER db is ready
   const authRoutes  = require('./routes/auth');
   const matchRoutes = require('./routes/matches');
   const userRoutes  = require('./routes/users');
+  const oauthRoutes = require('./routes/oauth');
 
-  app.use('/api/auth',    authRoutes);
-  app.use('/api/matches', matchRoutes);
-  app.use('/api/users',   userRoutes);
+  app.use('/api/auth',          authRoutes);
+  app.use('/api/auth/oauth',    oauthRoutes);
+  app.use('/api/matches',       matchRoutes);
+  app.use('/api/users',         userRoutes);
+
+  // 404 handler must come AFTER all routes
+  app.use((req, res) => {
+    res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+  });
+
+  // Global error handler
+  app.use((err, req, res, next) => {
+    console.error('[error]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
 
   initSocket(io);
 
@@ -77,13 +86,13 @@ getDb().then(db => {
         console.log(`  ✅ Operator: ${c.operatorAddress} (${c.operatorBalance})`);
         console.log(`  ✅ Contract: ${c.contractAddress}\n`);
       } else {
-        console.warn(`  ⚠️  Blockchain not connected: ${c.error}`);
-        console.warn(`  ⚠️  Fill in OPERATOR_PRIVATE_KEY and CONTRACT_ADDRESS in .env\n`);
+        console.warn(`  ⚠️  Blockchain not connected: ${c.error}\n`);
       }
     });
   });
+
 }).catch(err => {
-  console.error('Failed to initialise database:', err);
+  console.error('[startup] Failed to initialise database:', err);
   process.exit(1);
 });
 
